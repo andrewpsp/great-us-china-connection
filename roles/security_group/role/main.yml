@@ -1,0 +1,24 @@
+- name: Get the existing vpc
+  ali_vpc_facts:
+    region: '{{alicloud_region}}'
+    vpc_name: '{{vpc_name}}'
+  register: vpcs
+
+- name: Get the existing groups
+  ali_security_group_facts:
+    region: '{{alicloud_region}}'
+    group_name: '{{ group_name }}'
+    filters:
+      vpc_id: '{{vpcs.vpcs.0.id}}'
+  register: sgs
+
+- name: Creating security group
+  ali_security_group:
+    alicloud_region: '{{ alicloud_region }}'
+    state: 'present'
+    name: '{{ group_name }}'
+    description: '{{ group_description }}'
+    vpc_id: '{{vpcs.vpcs.0.id}}'
+    rules: '{{ group_inboundRules }}'
+  when: not sgs.groups
+  register: group

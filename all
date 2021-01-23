@@ -1,0 +1,46 @@
+# common parameters
+alicloud_region: "virginia"
+alicloud_zone: "us-east-1"
+
+# create vpc parameters
+vpc_cidr: "172.16.0.0/12"
+vpc_name: "base_component_cloud"
+vpc_description: "Create a new VPC base_component_cloud."
+
+# create vswitch parameters
+vswitch_cidr: "172.16.1.0/24"
+vswitch_name: "base_component_cloud"
+vswitch_description: "Create a new VSwitch base_component_cloud."
+
+# create security parameters
+group_name: "base_component_cloud"
+group_description: "Create a new security group base_component_cloud."
+group_inboundRules:
+  - ip_protocol: tcp
+    port_range: 22/22
+    source_cidr_ip: 0.0.0.0/0
+    priority: 1
+
+  - ip_protocol: tcp
+    port_range: 80/80
+    source_cidr_ip: 0.0.0.0/0
+    priority: 1
+
+# create ECS instance parameters
+image_id: "ubuntu_20_04_x64_20G_alibase_20201228.vhd"
+instance_type: "	ecs.t5-lc1m1.small"
+instance_name: "base_component_cloud_instance"
+instance_description: "Create a new ECS instance base_component_cloud."
+host_name: "M4X_ansible_control"
+password: "maxup"
+
+allocate_public_ip: True
+internet_charge_type: "PayByTraffic"
+max_bandwidth_in: 200
+max_bandwidth_out: 50
+instance_tags: {created_from: M4X_ansible_control}
+
+system_disk_category: "cloud_ssd"
+system_disk_size: 20
+
+number_of_instances: 1

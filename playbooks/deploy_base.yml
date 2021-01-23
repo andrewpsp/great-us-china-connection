@@ -1,0 +1,9 @@
+- name: Deploy
+  hosts: tag_created_from_M4x_ansible_control
+  remote_user: root
+  tasks:
+      - name: ensure install nginx
+        apt: 
+          name: nginx
+
+  

@@ -1,0 +1,9 @@
+- name: Create Resources
+  hosts: localhost
+  remote_user: root
+
+  roles:
+    - vpc
+    - vswitch
+    - security_group
+    - ecs

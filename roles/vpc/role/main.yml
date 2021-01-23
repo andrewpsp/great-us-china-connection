@@ -1,0 +1,15 @@
+- name: Get the existing vpc
+  ali_vpc_facts:
+    region: '{{alicloud_region}}'
+    vpc_name: '{{vpc_name}}'
+  register: vpcs
+
+- name: Create a new alicloud VPC resource
+  ali_vpc:
+    alicloud_region: '{{ alicloud_region }}'
+    state: 'present'
+    cidr_block: '{{ vpc_cidr }}'
+    vpc_name: '{{ vpc_name }}'
+    description: '{{ vpc_description }}'
+  when: not vpcs.vpcs
+  register: vpc
