@@ -1,0 +1,19 @@
+{{- if .Values.useEtcd }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "coredns-etcd.fullname" . }}-etcd
+  labels:
+    app: etcd
+spec:
+  clusterIP: None
+  ports:
+  - name: client
+    port: {{ .Values.etcd.service.clientPort }}
+    targetPort: client
+  - name: peer
+    port: {{ .Values.etcd.service.peerPort }}
+    targetPort: peer
+  selector:
+    app: etcd
+{{- end }}

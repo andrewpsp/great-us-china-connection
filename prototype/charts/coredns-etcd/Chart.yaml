@@ -1,0 +1,6 @@
+apiVersion: v2
+name: coredns-etcd
+description: A Helm chart for CoreDNS with etcd backend for PolyCloud
+type: application
+version: 0.1.0
+appVersion: "1.11.1"

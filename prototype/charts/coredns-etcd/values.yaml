@@ -1,0 +1,45 @@
+# Default values for coredns-etcd
+useEtcd: true
+
+coredns:
+  image:
+    repository: coredns/coredns
+    tag: "1.11.1"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 53
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+etcd:
+  image:
+    repository: quay.io/coreos/etcd
+    tag: "v3.5.17"
+    pullPolicy: IfNotPresent
+  service:
+    clientPort: 2379
+    peerPort: 2380
+  storage:
+    size: 1Gi
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# DNS zone configuration
+zone:
+  name: "example.local."
+  # Example records for ConfigMap-based setup (when useEtcd=false)
+  records: |
+    app.example.local. 60 IN A 10.1.2.3
+    db.example.local. 60 IN A 10.1.2.4

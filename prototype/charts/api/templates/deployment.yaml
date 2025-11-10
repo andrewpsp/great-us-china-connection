@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "polycloud-api.fullname" . }}
+  labels:
+    app: {{ include "polycloud-api.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "polycloud-api.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "polycloud-api.name" . }}
+    spec:
+      containers:
+      - name: api
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        {{- if .Values.etcd.enabled }}
+        env:
+        - name: ETCD_ENDPOINTS
+          value: "{{ .Values.etcd.endpoints }}"
+        - name: ETCD_PREFIX
+          value: "{{ .Values.etcd.prefix }}"
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}

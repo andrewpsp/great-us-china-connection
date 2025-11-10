@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "coredns-etcd.fullname" . }}-coredns
+  labels:
+    app: coredns
+spec:
+  replicas: {{ .Values.coredns.replicaCount }}
+  selector:
+    matchLabels:
+      app: coredns
+  template:
+    metadata:
+      labels:
+        app: coredns
+    spec:
+      containers:
+      - name: coredns
+        image: "{{ .Values.coredns.image.repository }}:{{ .Values.coredns.image.tag }}"
+        imagePullPolicy: {{ .Values.coredns.image.pullPolicy }}
+        args: ["-conf", "/etc/coredns/Corefile"]
+        ports:
+        - name: dns
+          containerPort: 53
+          protocol: UDP
+        - name: dns-tcp
+          containerPort: 53
+          protocol: TCP
+        volumeMounts:
+        - name: config
+          mountPath: /etc/coredns
+          readOnly: true
+        {{- if not .Values.useEtcd }}
+        - name: zones
+          mountPath: /etc/coredns/zones
+          readOnly: true
+        {{- end }}
+        resources:
+          {{- toYaml .Values.coredns.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "coredns-etcd.fullname" . }}-config
+          items:
+          - key: Corefile
+            path: Corefile
+      {{- if not .Values.useEtcd }}
+      - name: zones
+        configMap:
+          name: {{ include "coredns-etcd.fullname" . }}-config
+          items:
+          - key: {{ .Values.zone.name }}zone
+            path: {{ .Values.zone.name }}zone
+      {{- end }}
