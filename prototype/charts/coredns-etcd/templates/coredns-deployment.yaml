@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "coredns-etcd.fullname" . }}-coredns
+  labels:
+    app: coredns
+    chart: {{ include "coredns-etcd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.coredns.replicaCount }}
+  selector:
+    matchLabels:
+      app: coredns
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: coredns
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: coredns
+        image: "{{ .Values.coredns.image.repository }}:{{ .Values.coredns.image.tag }}"
+        imagePullPolicy: {{ .Values.coredns.image.pullPolicy }}
+        args:
+        - "-conf"
+        - "/etc/coredns/Corefile"
+        ports:
+        - name: dns-udp
+          containerPort: 53
+          protocol: UDP
+        - name: dns-tcp
+          containerPort: 53
+          protocol: TCP
+        volumeMounts:
+        - name: config
+          mountPath: /etc/coredns
+          readOnly: true
+        {{- if not .Values.useEtcd }}
+        - name: zones
+          mountPath: /etc/coredns/zones
+          readOnly: true
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8181
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.coredns.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "coredns-etcd.fullname" . }}-config
+          items:
+          - key: Corefile
+            path: Corefile
+      {{- if not .Values.useEtcd }}
+      - name: zones
+        configMap:
+          name: {{ include "coredns-etcd.fullname" . }}-config
+          items:
+          - key: {{ .Values.coredns.zone }}db
+            path: {{ .Values.coredns.zone }}db
+      {{- end }}

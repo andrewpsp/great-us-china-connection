@@ -1,0 +1,71 @@
+{{- if .Values.useEtcd }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "coredns-etcd.fullname" . }}-etcd
+  labels:
+    app: etcd
+    chart: {{ include "coredns-etcd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  serviceName: {{ include "coredns-etcd.fullname" . }}-etcd
+  replicas: {{ .Values.etcd.replicaCount }}
+  selector:
+    matchLabels:
+      app: etcd
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: etcd
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: etcd
+        image: "{{ .Values.etcd.image.repository }}:{{ .Values.etcd.image.tag }}"
+        imagePullPolicy: {{ .Values.etcd.image.pullPolicy }}
+        ports:
+        - name: client
+          containerPort: 2379
+          protocol: TCP
+        - name: peer
+          containerPort: 2380
+          protocol: TCP
+        env:
+        - name: ETCD_NAME
+          value: "etcd-0"
+        - name: ETCD_DATA_DIR
+          value: {{ .Values.etcd.dataDir }}
+        - name: ETCD_LISTEN_CLIENT_URLS
+          value: "http://0.0.0.0:2379"
+        - name: ETCD_ADVERTISE_CLIENT_URLS
+          value: "http://{{ include "coredns-etcd.fullname" . }}-etcd-0.{{ include "coredns-etcd.fullname" . }}-etcd:2379"
+        - name: ETCD_LISTEN_PEER_URLS
+          value: "http://0.0.0.0:2380"
+        - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
+          value: "http://{{ include "coredns-etcd.fullname" . }}-etcd-0.{{ include "coredns-etcd.fullname" . }}-etcd:2380"
+        - name: ETCD_INITIAL_CLUSTER
+          value: "etcd-0=http://{{ include "coredns-etcd.fullname" . }}-etcd-0.{{ include "coredns-etcd.fullname" . }}-etcd:2380"
+        - name: ETCD_INITIAL_CLUSTER_STATE
+          value: "new"
+        - name: ETCD_INITIAL_CLUSTER_TOKEN
+          value: "conn3ction-etcd-cluster"
+        resources:
+          {{- toYaml .Values.etcd.resources | nindent 10 }}
+        {{- if .Values.etcd.persistence.enabled }}
+        volumeMounts:
+        - name: etcd-data
+          mountPath: {{ .Values.etcd.dataDir }}
+        {{- end }}
+  {{- if .Values.etcd.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: etcd-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.etcd.persistence.size }}
+  {{- end }}
+{{- end }}
