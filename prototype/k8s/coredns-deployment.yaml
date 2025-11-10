@@ -1,0 +1,105 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-config
+  labels:
+    app: coredns
+data:
+  Corefile: |
+    example.local. {
+        log
+        errors
+        file /etc/coredns/zones/example.local.zone
+        forward . /etc/resolv.conf
+        cache 30
+    }
+
+    . {
+        forward . /etc/resolv.conf
+        log
+        errors
+        cache 30
+    }
+  example.local.zone: |
+    example.local. 60 IN SOA ns1.example.local. admin.example.local. 2024111001 3600 1800 604800 60
+    example.local. 60 IN NS ns1.example.local.
+    ns1.example.local. 60 IN A 10.0.0.1
+    test.example.local. 60 IN A 10.1.2.3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredns
+  labels:
+    app: coredns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coredns
+  template:
+    metadata:
+      labels:
+        app: coredns
+    spec:
+      containers:
+      - name: coredns
+        image: coredns/coredns:1.11.1
+        args:
+        - -conf
+        - /etc/coredns/Corefile
+        ports:
+        - name: dns-udp
+          containerPort: 53
+          protocol: UDP
+        - name: dns-tcp
+          containerPort: 53
+          protocol: TCP
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/coredns
+          readOnly: true
+        - name: zones-volume
+          mountPath: /etc/coredns/zones
+          readOnly: true
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+      volumes:
+      - name: config-volume
+        configMap:
+          name: coredns-config
+          items:
+          - key: Corefile
+            path: Corefile
+      - name: zones-volume
+        configMap:
+          name: coredns-config
+          items:
+          - key: example.local.zone
+            path: example.local.zone
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coredns
+  labels:
+    app: coredns
+spec:
+  type: ClusterIP
+  ports:
+  - name: dns-udp
+    port: 53
+    targetPort: dns-udp
+    protocol: UDP
+  - name: dns-tcp
+    port: 53
+    targetPort: dns-tcp
+    protocol: TCP
+  selector:
+    app: coredns

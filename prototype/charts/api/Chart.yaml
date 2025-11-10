@@ -1,0 +1,6 @@
+apiVersion: v2
+name: conn3ction-api
+description: A Helm chart for Conn3ction DNS API
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

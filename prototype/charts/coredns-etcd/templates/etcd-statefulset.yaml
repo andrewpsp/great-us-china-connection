@@ -1,0 +1,73 @@
+{{- if .Values.etcd.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: etcd
+  labels:
+    app: etcd
+    chart: {{ include "conn3ction-coredns-etcd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  serviceName: etcd
+  replicas: {{ .Values.etcd.replicaCount }}
+  selector:
+    matchLabels:
+      app: etcd
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: etcd
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: etcd
+        image: "{{ .Values.etcd.image.repository }}:{{ .Values.etcd.image.tag }}"
+        imagePullPolicy: {{ .Values.etcd.image.pullPolicy }}
+        ports:
+        - name: client
+          containerPort: 2379
+          protocol: TCP
+        - name: peer
+          containerPort: 2380
+          protocol: TCP
+        env:
+        - name: ETCD_NAME
+          value: "etcd-0"
+        - name: ETCD_DATA_DIR
+          value: "/etcd-data"
+        - name: ETCD_LISTEN_CLIENT_URLS
+          value: "http://0.0.0.0:2379"
+        - name: ETCD_ADVERTISE_CLIENT_URLS
+          value: "http://etcd:2379"
+        - name: ETCD_LISTEN_PEER_URLS
+          value: "http://0.0.0.0:2380"
+        - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
+          value: "http://etcd-0.etcd:2380"
+        - name: ETCD_INITIAL_CLUSTER
+          value: "etcd-0=http://etcd-0.etcd:2380"
+        - name: ETCD_INITIAL_CLUSTER_STATE
+          value: "new"
+        - name: ETCD_INITIAL_CLUSTER_TOKEN
+          value: "conn3ction-etcd-cluster"
+        volumeMounts:
+        - name: etcd-data
+          mountPath: /etcd-data
+        resources:
+          {{- toYaml .Values.etcd.resources | nindent 10 }}
+  {{- if .Values.etcd.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: etcd-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.etcd.persistence.size }}
+  {{- else }}
+  volumes:
+  - name: etcd-data
+    emptyDir: {}
+  {{- end }}
+{{- end }}
