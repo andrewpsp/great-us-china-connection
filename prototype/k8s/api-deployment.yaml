@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: polycloud-api
+  labels:
+    app: polycloud-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: polycloud-api
+  template:
+    metadata:
+      labels:
+        app: polycloud-api
+    spec:
+      containers:
+      - name: api
+        image: polycloud-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        # Uncomment to enable etcd backend
+        # - name: ETCD_ENDPOINTS
+        #   value: "etcd-0.etcd:2379"
+        # - name: ETCD_PREFIX
+        #   value: "/polycloud/records"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: polycloud-api
+  labels:
+    app: polycloud-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: polycloud-api

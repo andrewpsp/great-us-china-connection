@@ -1,0 +1,62 @@
+{{- if .Values.useEtcd }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "coredns-etcd.fullname" . }}-etcd
+  labels:
+    app: etcd
+spec:
+  serviceName: {{ include "coredns-etcd.fullname" . }}-etcd
+  replicas: 1
+  selector:
+    matchLabels:
+      app: etcd
+  template:
+    metadata:
+      labels:
+        app: etcd
+    spec:
+      containers:
+      - name: etcd
+        image: "{{ .Values.etcd.image.repository }}:{{ .Values.etcd.image.tag }}"
+        imagePullPolicy: {{ .Values.etcd.image.pullPolicy }}
+        ports:
+        - name: client
+          containerPort: {{ .Values.etcd.service.clientPort }}
+        - name: peer
+          containerPort: {{ .Values.etcd.service.peerPort }}
+        env:
+        - name: ETCD_NAME
+          value: "etcd-0"
+        - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
+          value: "http://$(POD_NAME).{{ include "coredns-etcd.fullname" . }}-etcd:{{ .Values.etcd.service.peerPort }}"
+        - name: ETCD_LISTEN_PEER_URLS
+          value: "http://0.0.0.0:{{ .Values.etcd.service.peerPort }}"
+        - name: ETCD_LISTEN_CLIENT_URLS
+          value: "http://0.0.0.0:{{ .Values.etcd.service.clientPort }}"
+        - name: ETCD_ADVERTISE_CLIENT_URLS
+          value: "http://$(POD_NAME).{{ include "coredns-etcd.fullname" . }}-etcd:{{ .Values.etcd.service.clientPort }}"
+        - name: ETCD_INITIAL_CLUSTER
+          value: "etcd-0=http://etcd-0.{{ include "coredns-etcd.fullname" . }}-etcd:{{ .Values.etcd.service.peerPort }}"
+        - name: ETCD_INITIAL_CLUSTER_STATE
+          value: "new"
+        - name: ETCD_INITIAL_CLUSTER_TOKEN
+          value: "etcd-cluster"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: data
+          mountPath: /etcd-data
+        resources:
+          {{- toYaml .Values.etcd.resources | nindent 10 }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.etcd.storage.size }}
+{{- end }}

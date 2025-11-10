@@ -1,0 +1,25 @@
+# Default values for polycloud-api
+replicaCount: 1
+
+image:
+  repository: polycloud-api
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Etcd configuration
+etcd:
+  enabled: false
+  endpoints: ""  # Comma-separated list of etcd endpoints
+  prefix: "/polycloud/records"
