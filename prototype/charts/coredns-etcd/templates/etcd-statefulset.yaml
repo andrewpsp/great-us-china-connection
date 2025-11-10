@@ -1,15 +1,15 @@
-{{- if .Values.etcd.enabled }}
+{{- if .Values.useEtcd }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: etcd
+  name: {{ include "coredns-etcd.fullname" . }}-etcd
   labels:
     app: etcd
-    chart: {{ include "conn3ction-coredns-etcd.chart" . }}
+    chart: {{ include "coredns-etcd.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
-  serviceName: etcd
+  serviceName: {{ include "coredns-etcd.fullname" . }}-etcd
   replicas: {{ .Values.etcd.replicaCount }}
   selector:
     matchLabels:
@@ -36,26 +36,28 @@ spec:
         - name: ETCD_NAME
           value: "etcd-0"
         - name: ETCD_DATA_DIR
-          value: "/etcd-data"
+          value: {{ .Values.etcd.dataDir }}
         - name: ETCD_LISTEN_CLIENT_URLS
           value: "http://0.0.0.0:2379"
         - name: ETCD_ADVERTISE_CLIENT_URLS
-          value: "http://etcd:2379"
+          value: "http://{{ include "coredns-etcd.fullname" . }}-etcd-0.{{ include "coredns-etcd.fullname" . }}-etcd:2379"
         - name: ETCD_LISTEN_PEER_URLS
           value: "http://0.0.0.0:2380"
         - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
-          value: "http://etcd-0.etcd:2380"
+          value: "http://{{ include "coredns-etcd.fullname" . }}-etcd-0.{{ include "coredns-etcd.fullname" . }}-etcd:2380"
         - name: ETCD_INITIAL_CLUSTER
-          value: "etcd-0=http://etcd-0.etcd:2380"
+          value: "etcd-0=http://{{ include "coredns-etcd.fullname" . }}-etcd-0.{{ include "coredns-etcd.fullname" . }}-etcd:2380"
         - name: ETCD_INITIAL_CLUSTER_STATE
           value: "new"
         - name: ETCD_INITIAL_CLUSTER_TOKEN
           value: "conn3ction-etcd-cluster"
-        volumeMounts:
-        - name: etcd-data
-          mountPath: /etcd-data
         resources:
           {{- toYaml .Values.etcd.resources | nindent 10 }}
+        {{- if .Values.etcd.persistence.enabled }}
+        volumeMounts:
+        - name: etcd-data
+          mountPath: {{ .Values.etcd.dataDir }}
+        {{- end }}
   {{- if .Values.etcd.persistence.enabled }}
   volumeClaimTemplates:
   - metadata:
@@ -65,9 +67,5 @@ spec:
       resources:
         requests:
           storage: {{ .Values.etcd.persistence.size }}
-  {{- else }}
-  volumes:
-  - name: etcd-data
-    emptyDir: {}
   {{- end }}
 {{- end }}

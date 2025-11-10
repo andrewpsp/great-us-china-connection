@@ -1,4 +1,3 @@
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,11 +23,11 @@ spec:
           containerPort: 8080
           protocol: TCP
         env:
-        # Uncomment to enable etcd backend
+        # Uncomment to use etcd
         # - name: ETCD_ENDPOINTS
-        #   value: "etcd:2379"
+        #   value: "etcd-0.etcd:2379"
         # - name: ETCD_PREFIX
-        #   value: "/conn3ction/records"
+        #   value: "/conn3ction/records/"
         livenessProbe:
           httpGet:
             path: /healthz
@@ -43,8 +42,8 @@ spec:
           periodSeconds: 5
         resources:
           limits:
-            cpu: 200m
-            memory: 256Mi
+            cpu: 500m
+            memory: 512Mi
           requests:
             cpu: 100m
             memory: 128Mi

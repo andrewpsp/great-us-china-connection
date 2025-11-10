@@ -1,0 +1,26 @@
+{{- if .Values.useEtcd }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "coredns-etcd.fullname" . }}-etcd
+  labels:
+    app: etcd
+    chart: {{ include "coredns-etcd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.etcd.service.type }}
+  clusterIP: None
+  ports:
+  - name: client
+    port: {{ .Values.etcd.service.clientPort }}
+    targetPort: client
+    protocol: TCP
+  - name: peer
+    port: {{ .Values.etcd.service.peerPort }}
+    targetPort: peer
+    protocol: TCP
+  selector:
+    app: etcd
+    release: {{ .Release.Name }}
+{{- end }}

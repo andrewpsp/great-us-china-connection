@@ -1,27 +1,27 @@
 #!/bin/bash
+# Build and load Conn3ction API image into kind cluster
+
 set -e
 
-# Build and load Conn3ction prototype images into kind cluster
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+API_DIR="$SCRIPT_DIR/../api"
 
 echo "Building Conn3ction API Docker image..."
-cd "$(dirname "$0")/../api"
+cd "$API_DIR"
 docker build -t conn3ction-api:latest .
 
-# Check if kind cluster exists
-if ! kind get clusters 2>/dev/null | grep -q "^kind$"; then
-  echo "No kind cluster named 'kind' found. Please create one first with:"
-  echo "  kind create cluster"
-  exit 1
+# Check if kind is available and load into kind cluster
+if command -v kind &> /dev/null; then
+    echo "Loading image into kind cluster..."
+    kind load docker-image conn3ction-api:latest || echo "Warning: Failed to load image into kind cluster. Make sure a cluster is running."
+else
+    echo "kind not found. Skipping kind cluster load."
 fi
 
-echo "Loading image into kind cluster..."
-kind load docker-image conn3ction-api:latest
-
-echo "Done! Image conn3ction-api:latest is now available in the kind cluster."
+echo "Build complete! Image: conn3ction-api:latest"
 echo ""
-echo "To deploy with kubectl:"
-echo "  kubectl apply -f ../k8s/"
+echo "To deploy to Kubernetes:"
+echo "  kubectl apply -f $SCRIPT_DIR/../k8s/api-deployment.yaml"
 echo ""
 echo "To deploy with Helm:"
-echo "  helm install conn3ction-api ../charts/api/"
-echo "  helm install conn3ction-dns ../charts/coredns-etcd/"
+echo "  helm install conn3ction-api $SCRIPT_DIR/../charts/api/"

@@ -2,199 +2,162 @@
 
 ## Overview
 
-Conn3ction (formerly PolyCloud) is a DNS-based, region-aware routing and service discovery system designed to enable seamless connectivity across geographically distributed infrastructure. The system leverages CoreDNS with etcd as a distributed backend to provide dynamic DNS record management and intelligent traffic routing.
+Conn3ction (formerly PolyCloud) is a DNS and region-aware system for intelligent service discovery and routing across distributed infrastructure. This document describes the architecture and design principles of the Conn3ction prototype.
 
-## Core Components
+## Components
 
 ### 1. DNS API Service
-A lightweight Go-based REST API that provides CRUD operations for DNS records:
-- **Technology**: Go (golang), gorilla/mux for routing
-- **Storage Backends**: 
-  - In-memory store (default, for development)
-  - etcd (for production, distributed state)
-- **Endpoints**:
-  - `GET /healthz` - Health check
-  - `GET /records` - List all DNS records
-  - `POST /records` - Create new DNS record
-  - `PUT /records/{name}` - Update existing record
-  - `DELETE /records/{name}` - Delete record
-- **Record Format**: `{"name":"app.example.local","type":"A","values":["10.1.2.3"],"ttl":60}`
+
+The DNS API service provides a RESTful interface for managing DNS records. It supports both in-memory storage (for development) and etcd-backed storage (for production).
+
+**Key Features:**
+- RESTful API for CRUD operations on DNS records
+- Pluggable storage backend (in-memory or etcd)
+- Health check endpoints
+- Graceful shutdown
+- Cloud-native deployment with Kubernetes
+
+**API Endpoints:**
+- `GET /healthz` - Health check
+- `GET /records` - List all DNS records
+- `POST /records` - Create a new DNS record
+- `PUT /records/{name}` - Update an existing DNS record
+- `DELETE /records/{name}` - Delete a DNS record
+- `GET /records/{name}` - Get a specific DNS record
 
 ### 2. CoreDNS
-An extensible DNS server that serves as the primary DNS resolver:
-- **Plugin Configuration**: 
-  - etcd plugin for dynamic record lookup from etcd backend
-  - file plugin for static zone files (development/fallback)
-  - forward plugin for upstream DNS resolution
-  - cache plugin for performance optimization
-- **Zone Management**: Serves configured zones (e.g., `example.local.`) with records stored in etcd under `/conn3ction/zones`
+
+CoreDNS serves as the DNS server, providing resolution for configured zones. It can be configured with:
+- etcd backend for dynamic DNS records
+- File-based backend for static configurations
+- Forwarding to upstream DNS servers for external queries
 
 ### 3. etcd
-A distributed key-value store providing:
-- **Persistent Storage**: DNS records stored under `/conn3ction/records/` and `/conn3ction/zones/`
-- **Consistency**: Strong consistency guarantees for DNS data
-- **Watch API**: Real-time updates for DNS changes
-- **High Availability**: Can be deployed as a multi-node cluster (prototype uses single node)
 
-## Data Flow
+etcd provides distributed storage for DNS records and configuration data. It serves as the backend for both the API service and CoreDNS.
 
-### Record Creation Flow
-```
-1. Client → POST /records → DNS API
-2. DNS API → Validate record → Store in backend (Memory or etcd)
-3. If etcd: DNS API → Put /conn3ction/records/{name} → etcd
-4. CoreDNS (etcd plugin) → Watch etcd → Auto-discover new records
-5. DNS queries → CoreDNS → etcd lookup → Return response
-```
+**Key Prefixes:**
+- `/conn3ction/records/` - DNS records managed by the API
+- `/conn3ction/zones/` - DNS zones for CoreDNS
 
-### DNS Resolution Flow
+## Architecture Diagram
+
 ```
-1. Client → DNS Query (e.g., app.example.local) → CoreDNS
-2. CoreDNS → Check cache
-3. If not cached:
-   - Query etcd backend at /conn3ction/zones/example.local/app
-   - Or lookup from static zone file
-4. Return A record (e.g., 10.1.2.3) to client
-5. Cache for TTL duration
+┌─────────────┐     ┌──────────────┐     ┌─────────┐
+│   Clients   │────▶│  DNS API     │────▶│  etcd   │
+└─────────────┘     │  Service     │     └─────────┘
+                    └──────────────┘          │
+                                              │
+┌─────────────┐     ┌──────────────┐         │
+│ DNS Clients │────▶│  CoreDNS     │◀────────┘
+└─────────────┘     └──────────────┘
 ```
 
-## Deployment Architecture
+## Deployment Options
 
-### Development (Minikube/Kind)
-```
-┌─────────────────────────────────────┐
-│         Kubernetes Cluster          │
-├─────────────────────────────────────┤
-│                                     │
-│  ┌──────────────┐  ┌─────────────┐ │
-│  │  DNS API     │  │   CoreDNS   │ │
-│  │  (Pod)       │  │   (Pod)     │ │
-│  └──────┬───────┘  └──────┬──────┘ │
-│         │                  │        │
-│         │  ┌──────────────┐        │
-│         └──│    etcd      │◄───────┘
-│            │ (StatefulSet)│        │
-│            └──────────────┘        │
-│                                     │
-└─────────────────────────────────────┘
-```
+### 1. Kubernetes with Helm
 
-### Production (Multi-Region)
-```
-┌────────────────────┐         ┌────────────────────┐
-│   Region: US-West  │         │   Region: CN-East  │
-├────────────────────┤         ├────────────────────┤
-│                    │         │                    │
-│  ┌───────────────┐ │         │  ┌───────────────┐ │
-│  │ DNS API       │ │         │  │ DNS API       │ │
-│  └───────┬───────┘ │         │  └───────┬───────┘ │
-│          │         │         │          │         │
-│  ┌───────▼───────┐ │         │  ┌───────▼───────┐ │
-│  │   CoreDNS     │ │         │  │   CoreDNS     │ │
-│  └───────┬───────┘ │         │  └───────┬───────┘ │
-│          │         │         │          │         │
-└──────────┼─────────┘         └──────────┼─────────┘
-           │                              │
-           │      ┌──────────────┐        │
-           └──────►  etcd Cluster◄────────┘
-                  │  (Multi-node) │
-                  └──────────────┘
-```
+The recommended deployment method uses Helm charts:
 
-## Key Design Principles
+- `charts/api/` - Deploys the DNS API service
+- `charts/coredns-etcd/` - Deploys CoreDNS and optionally etcd
 
-### 1. Separation of Concerns
-- **DNS API**: Record management and business logic
-- **CoreDNS**: DNS protocol handling and resolution
-- **etcd**: Distributed state and persistence
+### 2. Direct Kubernetes Manifests
 
-### 2. Flexibility
-- Support for multiple storage backends (in-memory for dev, etcd for prod)
-- Configurable via environment variables
-- Helm charts for easy deployment customization
+For simpler deployments, raw Kubernetes manifests are available in `k8s/`:
 
-### 3. Scalability
-- Stateless DNS API (can be horizontally scaled)
-- CoreDNS can be scaled across multiple replicas
-- etcd provides distributed backend (can be clustered)
+- `api-deployment.yaml` - API service
+- `etcd-statefulset.yaml` - etcd cluster
+- `coredns-deployment.yaml` - CoreDNS server
 
-### 4. Region Awareness (Future)
-- DNS records can include region metadata
-- Intelligent routing based on client location
-- Latency-based or geo-proximity routing
+## Storage Backends
 
-## etcd Key Structure
+### In-Memory Store
 
-### Records (API Storage)
-```
-/conn3ction/records/{fqdn} → JSON record data
-Example:
-/conn3ction/records/app.example.local → {"name":"app.example.local","type":"A","values":["10.1.2.3"],"ttl":60}
-```
+For development and testing, the API service can use an in-memory store:
+- No external dependencies
+- Fast and simple
+- Data is lost on restart
 
-### Zones (CoreDNS Backend)
-```
-/conn3ction/zones/{zone}/{hostname}/{type} → DNS record value
-Example:
-/conn3ction/zones/example.local/app/A → 10.1.2.3
-```
+### etcd Store
+
+For production deployments, etcd provides:
+- Persistent storage
+- Distributed consensus
+- Watch capabilities for real-time updates
+- High availability
 
 ## Configuration
 
-### DNS API Environment Variables
-- `ETCD_ENDPOINTS`: Comma-separated etcd endpoints (e.g., "etcd:2379")
-- `ETCD_PREFIX`: Key prefix for records (default: "/conn3ction/records")
-- `PORT`: API listen port (default: "8080")
+### Environment Variables
 
-### CoreDNS Corefile
-```
-example.local. {
-    log
-    errors
-    etcd {
-        path /conn3ction/zones
-        endpoint etcd:2379
-    }
-    forward . /etc/resolv.conf
-    cache 30
+**API Service:**
+- `ETCD_ENDPOINTS` - Comma-separated list of etcd endpoints (optional)
+- `ETCD_PREFIX` - Key prefix for DNS records (default: `/conn3ction/records/`)
+
+**CoreDNS:**
+Configured via Corefile (see Helm charts and k8s manifests)
+
+## Future Enhancements
+
+1. **Region-Aware Routing**
+   - Geographic routing based on client location
+   - Multi-region DNS resolution
+   - Health-based failover
+
+2. **RBAC and Authentication**
+   - API authentication and authorization
+   - Role-based access control
+   - Audit logging
+
+3. **Advanced DNS Features**
+   - Support for additional record types (CNAME, SRV, TXT, etc.)
+   - DNSSEC support
+   - DNS-based load balancing
+
+4. **Monitoring and Observability**
+   - Prometheus metrics
+   - Distributed tracing
+   - Structured logging
+
+5. **High Availability**
+   - Multi-replica etcd clusters
+   - CoreDNS clustering
+   - API service horizontal scaling
+
+## Record Format
+
+DNS records are represented in JSON format:
+
+```json
+{
+  "name": "app.example.local",
+  "type": "A",
+  "values": ["10.1.2.3"],
+  "ttl": 60
 }
 ```
 
-## Security Considerations (To Be Implemented)
+## Security Considerations
 
-1. **Authentication**: mTLS for etcd client connections
-2. **Authorization**: RBAC for API access control
-3. **Encryption**: TLS for DNS over TCP/TLS (DoT)
-4. **Network Policies**: Kubernetes NetworkPolicies to restrict traffic
-5. **Secrets Management**: Use Kubernetes Secrets for credentials
+1. **Network Policies**: Restrict access to etcd and API services
+2. **TLS**: Enable TLS for etcd client connections
+3. **Authentication**: Implement API key or OAuth2 authentication
+4. **RBAC**: Define roles for read-only vs. read-write access
+5. **Rate Limiting**: Protect API from abuse
 
-## Monitoring and Observability (Future)
+## Development and Testing
 
-1. **Metrics**: Prometheus metrics from CoreDNS and API
-2. **Logging**: Structured logging with correlation IDs
-3. **Tracing**: Distributed tracing for DNS resolution path
-4. **Alerting**: Alerts for DNS failures, etcd unavailability
-
-## Next Steps
-
-1. **RBAC Implementation**: Add authentication and authorization to API
-2. **Persistence Hardening**: Production-grade etcd configuration with persistence
-3. **Region Manager Integration**: Service that manages region-based routing
-4. **Health Checks**: Advanced health checking and failover logic
-5. **Multi-Cluster Support**: Federation across multiple Kubernetes clusters
-6. **Performance Optimization**: Caching strategies, connection pooling
-7. **Documentation**: API documentation (OpenAPI/Swagger)
+See the main README.md for instructions on:
+- Building the API service
+- Running locally
+- Deploying to Kubernetes
+- Testing DNS resolution
 
 ## Migration from PolyCloud
 
-All references to PolyCloud have been rebranded to Conn3ction:
-- Project name: PolyCloud → Conn3ction
-- etcd key prefixes: `/polycloud/*` → `/conn3ction/*`
-- Service names: polycloud-api → conn3ction-api
-- Documentation and configuration files updated
-
-## References
-
-- [CoreDNS Documentation](https://coredns.io/)
-- [etcd Documentation](https://etcd.io/)
-- [Kubernetes DNS Specification](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
+Conn3ction is a rebranding and evolution of the PolyCloud concept. Key changes:
+- Updated naming throughout codebase
+- etcd key prefixes changed from `/polycloud/` to `/conn3ction/`
+- Simplified API interface
+- Enhanced Helm chart flexibility

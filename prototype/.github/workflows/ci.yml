@@ -1,0 +1,67 @@
+name: Conn3ction API CI
+
+on:
+  push:
+    paths:
+      - 'prototype/api/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - 'prototype/api/**'
+      - '.github/workflows/ci.yml'
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Download dependencies
+      working-directory: ./prototype/api
+      run: go mod download
+    
+    - name: Run go vet
+      working-directory: ./prototype/api
+      run: go vet ./...
+    
+    - name: Run go fmt check
+      working-directory: ./prototype/api
+      run: |
+        if [ -n "$(gofmt -s -l .)" ]; then
+          echo "Go code is not formatted:"
+          gofmt -s -d .
+          exit 1
+        fi
+    
+    - name: Run tests
+      working-directory: ./prototype/api
+      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+    
+    - name: Build binary
+      working-directory: ./prototype/api
+      run: go build -v -o conn3ction-api .
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./prototype/api/coverage.txt
+        flags: api
+        name: conn3ction-api

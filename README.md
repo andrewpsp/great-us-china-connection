@@ -1,201 +1,185 @@
-# Conn3ction - Great US-China Connection
+# great-us-china-connection
+
 Automated Infrastructure Connection Practices
 
-## Overview
+## Conn3ction DNS Prototype
 
-This repository contains infrastructure automation tools and the **Conn3ction prototype** - a DNS-based, region-aware routing and service discovery system designed for distributed infrastructure.
+This repository includes the Conn3ction prototype - a minimal DNS and region-aware system implementing CoreDNS + etcd + a simple DNS API with Helm charts.
 
-## Conn3ction Prototype
-
-The `prototype/` directory contains a minimal implementation of Conn3ction featuring:
-- **DNS API**: Go-based REST API for managing DNS records (A records)
-- **CoreDNS**: DNS server with etcd backend for dynamic record resolution
-- **etcd**: Distributed key-value store for DNS data persistence
-- **Helm Charts**: Deployment charts for Kubernetes
-- **Example Manifests**: Direct kubectl deployment examples
-
-### Quick Start (Local Development)
+### Quick Start
 
 #### Prerequisites
+
 - Go 1.21+ (for building the API)
-- Docker (for containerization)
-- Kubernetes cluster (minikube, kind, or similar)
-- kubectl and helm CLI tools
-- dig (for DNS testing)
+- Docker (for building images)
+- Kubernetes cluster (minikube, kind, or cloud provider)
+- kubectl
+- Helm 3.x
+- dig (for testing DNS)
 
-#### Build the API
-
-```bash
-cd prototype/api
-go mod download
-go build -v .
-```
-
-#### Run locally (in-memory mode)
+#### Build the API Service
 
 ```bash
 cd prototype/api
-./api
-# API will start on http://localhost:8080
+go build -o conn3ction-api .
 ```
 
-#### Test the API
+#### Build Docker Image
 
 ```bash
-# Health check
-curl http://localhost:8080/healthz
-
-# Create a DNS record
-curl -X POST http://localhost:8080/records \
-  -H "Content-Type: application/json" \
-  -d '{"name":"app.example.local","type":"A","values":["10.1.2.3"],"ttl":60}'
-
-# List all records
-curl http://localhost:8080/records
-
-# Get specific record
-curl http://localhost:8080/records/app.example.local
-
-# Update record
-curl -X PUT http://localhost:8080/records/app.example.local \
-  -H "Content-Type: application/json" \
-  -d '{"name":"app.example.local","type":"A","values":["10.1.2.4"],"ttl":120}'
-
-# Delete record
-curl -X DELETE http://localhost:8080/records/app.example.local
+cd prototype/api
+docker build -t conn3ction-api:latest .
 ```
 
-### Kubernetes Deployment
-
-#### Option 1: Using Helm Charts
-
+For kind clusters:
 ```bash
-# Deploy CoreDNS with etcd
-helm install conn3ction-dns prototype/charts/coredns-etcd/
-
-# Deploy the API (with etcd backend)
-helm install conn3ction-api prototype/charts/api/ \
-  --set env.ETCD_ENDPOINTS="etcd:2379" \
-  --set env.ETCD_PREFIX="/conn3ction/records"
-
-# Or deploy API with in-memory storage (for testing)
-helm install conn3ction-api prototype/charts/api/
+./prototype/scripts/build-and-load.sh
 ```
 
-#### Option 2: Using kubectl
+#### Deploy with Helm
+
+Deploy etcd and CoreDNS:
+```bash
+helm install coredns-etcd ./prototype/charts/coredns-etcd/
+```
+
+Deploy the API service:
+```bash
+helm install conn3ction-api ./prototype/charts/api/ \
+  --set etcd.enabled=true \
+  --set etcd.endpoints="coredns-etcd-etcd-0.coredns-etcd-etcd:2379"
+```
+
+#### Deploy with kubectl
 
 ```bash
-# Deploy all components
-kubectl apply -f prototype/k8s/
-
-# Or deploy individually
 kubectl apply -f prototype/k8s/etcd-statefulset.yaml
 kubectl apply -f prototype/k8s/coredns-deployment.yaml
 kubectl apply -f prototype/k8s/api-deployment.yaml
 ```
 
-#### Option 3: Using kind (local development)
+#### Test the API
 
+Port-forward the API service:
 ```bash
-# Create a kind cluster
-kind create cluster
-
-# Build and load the API image
-cd prototype/scripts
-./build-and-load.sh
-
-# Deploy with kubectl
-kubectl apply -f ../k8s/
+kubectl port-forward svc/conn3ction-api 8080:8080
 ```
 
-### Testing DNS Resolution
-
+Test health endpoint:
 ```bash
-# Using the test script
-cd prototype/scripts
-./test-dns.sh
+curl http://localhost:8080/healthz
+```
 
-# Manual testing with dig (requires port-forward)
+Create a DNS record:
+```bash
+curl -X POST http://localhost:8080/records \
+  -H "Content-Type: application/json" \
+  -d '{"name":"app.example.local","type":"A","values":["10.1.2.3"],"ttl":60}'
+```
+
+List records:
+```bash
+curl http://localhost:8080/records
+```
+
+#### Test DNS Resolution
+
+Use the test script:
+```bash
+./prototype/scripts/test-dns.sh
+```
+
+Or manually with port-forward:
+```bash
 kubectl port-forward svc/coredns 5353:53
-dig @localhost -p 5353 test.example.local
-
-# Testing from within the cluster
-kubectl run -it --rm debug --image=busybox --restart=Never -- \
-  nslookup test.example.local coredns
+dig @localhost -p 5353 app.example.local
 ```
+
+### API Endpoints
+
+- `GET /healthz` - Health check (returns 200 OK)
+- `GET /records` - List all DNS records
+- `POST /records` - Create a DNS record
+- `PUT /records/{name}` - Update a DNS record
+- `DELETE /records/{name}` - Delete a DNS record
+- `GET /records/{name}` - Get a specific DNS record
 
 ### Configuration
 
-#### DNS API Environment Variables
-- `ETCD_ENDPOINTS`: Comma-separated etcd endpoints (default: in-memory mode)
-- `ETCD_PREFIX`: etcd key prefix (default: `/conn3ction/records`)
-- `PORT`: API listen port (default: `8080`)
+#### API Service Environment Variables
+
+- `ETCD_ENDPOINTS` - Comma-separated etcd endpoints (optional, uses in-memory store if not set)
+- `ETCD_PREFIX` - Key prefix for records (default: `/conn3ction/records/`)
 
 #### Helm Chart Values
-See `prototype/charts/api/values.yaml` and `prototype/charts/coredns-etcd/values.yaml` for all available configuration options.
+
+See `prototype/charts/api/values.yaml` and `prototype/charts/coredns-etcd/values.yaml` for configuration options.
 
 ### Architecture
 
-For detailed architecture documentation, see [CONN3CTION_ARCHITECTURE.md](./CONN3CTION_ARCHITECTURE.md).
+See [CONN3CTION_ARCHITECTURE.md](./CONN3CTION_ARCHITECTURE.md) for detailed architecture documentation.
 
-Key components:
-- **DNS API**: Manages DNS records via REST API, stores in etcd or memory
-- **CoreDNS**: Resolves DNS queries using etcd backend or static zone files
-- **etcd**: Provides distributed, consistent storage for DNS records
+### Development
 
-### Project Structure
-
-```
-prototype/
-├── api/                    # Go DNS API service
-│   ├── main.go            # Entry point and HTTP server
-│   ├── handlers.go        # HTTP request handlers
-│   ├── store.go           # Storage interface and implementations
-│   ├── Dockerfile         # Container image
-│   └── go.mod             # Go module dependencies
-├── charts/                # Helm charts
-│   ├── api/              # DNS API chart
-│   └── coredns-etcd/     # CoreDNS + etcd chart
-├── k8s/                   # Example Kubernetes manifests
-│   ├── api-deployment.yaml
-│   ├── etcd-statefulset.yaml
-│   └── coredns-deployment.yaml
-└── scripts/               # Helper scripts
-    ├── build-and-load.sh # Build and load into kind
-    └── test-dns.sh        # DNS testing script
+Run the API locally:
+```bash
+cd prototype/api
+go run .
 ```
 
-### Development Notes
+Run with etcd (requires etcd running locally):
+```bash
+export ETCD_ENDPOINTS="localhost:2379"
+go run .
+```
 
-- The prototype uses **in-memory storage by default** for easy local development
-- Set `ETCD_ENDPOINTS` environment variable to enable etcd backend
-- CoreDNS can be configured with or without etcd (see `useEtcd` in values.yaml)
-- Static zone files are supported for development without etcd
+Run tests:
+```bash
+cd prototype/api
+go test -v ./...
+```
 
 ### Next Steps
 
-- [ ] Add authentication and RBAC to the API
-- [ ] Implement persistence hardening for production
-- [ ] Region-manager service for intelligent routing
-- [ ] Multi-region DNS synchronization
-- [ ] Monitoring and metrics (Prometheus)
-- [ ] API documentation (OpenAPI/Swagger)
+- [ ] Implement RBAC for API authentication and authorization
+- [ ] Add persistence hardening for production deployments
+- [ ] Integrate with region-manager for multi-region awareness
+- [ ] Add support for additional DNS record types (CNAME, SRV, TXT)
+- [ ] Implement geographic routing capabilities
+- [ ] Add Prometheus metrics and monitoring
+- [ ] Enable DNSSEC support
 
-### Troubleshooting
+### Directory Structure
 
-**API won't start:**
-- Check if port 8080 is already in use
-- Verify etcd connectivity if `ETCD_ENDPOINTS` is set
+```
+prototype/
+├── api/                    # Go API service
+│   ├── main.go            # Application entry point
+│   ├── handlers.go        # HTTP handlers
+│   ├── store.go           # Storage implementations
+│   ├── go.mod             # Go module definition
+│   └── Dockerfile         # Container image
+├── charts/                # Helm charts
+│   ├── api/              # API service chart
+│   └── coredns-etcd/     # CoreDNS + etcd chart
+├── k8s/                  # Kubernetes manifests
+│   ├── api-deployment.yaml
+│   ├── etcd-statefulset.yaml
+│   └── coredns-deployment.yaml
+└── scripts/              # Helper scripts
+    ├── build-and-load.sh
+    └── test-dns.sh
+```
 
-**DNS queries fail:**
-- Ensure CoreDNS pod is running: `kubectl get pods -l app=coredns`
-- Check CoreDNS logs: `kubectl logs -l app=coredns`
-- Verify zone configuration in ConfigMap
+### Contributing
 
-**Helm install fails:**
-- Validate chart: `helm template prototype/charts/api/`
-- Check for resource conflicts: `kubectl get all`
+When contributing to the Conn3ction prototype:
+1. Ensure Go code is formatted with `gofmt`
+2. Run `go vet` to check for issues
+3. Test locally before submitting PRs
+4. Update documentation for new features
 
-## License
+### License
 
-See LICENSE file for details.
+See repository license file for details.
+

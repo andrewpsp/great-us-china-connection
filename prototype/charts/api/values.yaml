@@ -14,18 +14,25 @@ service:
   type: ClusterIP
   port: 8080
 
-env:
-  # Set to enable etcd backend
-  # ETCD_ENDPOINTS: "etcd:2379"
-  # ETCD_PREFIX: "/conn3ction/records"
-
 resources:
   limits:
-    cpu: 200m
-    memory: 256Mi
+    cpu: 500m
+    memory: 512Mi
   requests:
     cpu: 100m
     memory: 128Mi
+
+# etcd configuration
+etcd:
+  enabled: false
+  endpoints: ""
+  # Example: "etcd-0.etcd:2379,etcd-1.etcd:2379"
+  prefix: "/conn3ction/records/"
+
+env: []
+# Additional environment variables can be added here
+# - name: CUSTOM_VAR
+#   value: "custom_value"
 
 nodeSelector: {}
 

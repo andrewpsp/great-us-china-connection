@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: coredns
+  name: {{ include "coredns-etcd.fullname" . }}-coredns
   labels:
     app: coredns
-    chart: {{ include "conn3ction-coredns-etcd.chart" . }}
+    chart: {{ include "coredns-etcd.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
@@ -24,8 +24,8 @@ spec:
         image: "{{ .Values.coredns.image.repository }}:{{ .Values.coredns.image.tag }}"
         imagePullPolicy: {{ .Values.coredns.image.pullPolicy }}
         args:
-        - -conf
-        - /etc/coredns/Corefile
+        - "-conf"
+        - "/etc/coredns/Corefile"
         ports:
         - name: dns-udp
           containerPort: 53
@@ -33,12 +33,22 @@ spec:
         - name: dns-tcp
           containerPort: 53
           protocol: TCP
+        volumeMounts:
+        - name: config
+          mountPath: /etc/coredns
+          readOnly: true
+        {{- if not .Values.useEtcd }}
+        - name: zones
+          mountPath: /etc/coredns/zones
+          readOnly: true
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /health
             port: 8080
             scheme: HTTP
           initialDelaySeconds: 60
+          periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 5
@@ -48,32 +58,24 @@ spec:
             port: 8181
             scheme: HTTP
           initialDelaySeconds: 10
+            periodSeconds: 10
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 3
-        volumeMounts:
-        - name: config-volume
-          mountPath: /etc/coredns
-          readOnly: true
-        {{- if not .Values.useEtcd }}
-        - name: zones-volume
-          mountPath: /etc/coredns/zones
-          readOnly: true
-        {{- end }}
         resources:
           {{- toYaml .Values.coredns.resources | nindent 10 }}
       volumes:
-      - name: config-volume
+      - name: config
         configMap:
-          name: coredns-config
+          name: {{ include "coredns-etcd.fullname" . }}-config
           items:
           - key: Corefile
             path: Corefile
       {{- if not .Values.useEtcd }}
-      - name: zones-volume
+      - name: zones
         configMap:
-          name: coredns-config
+          name: {{ include "coredns-etcd.fullname" . }}-config
           items:
-          - key: {{ .Values.zone.name }}zone
-            path: {{ .Values.zone.name }}zone
+          - key: {{ .Values.coredns.zone }}db
+            path: {{ .Values.coredns.zone }}db
       {{- end }}

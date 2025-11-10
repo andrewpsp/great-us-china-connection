@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -21,7 +20,7 @@ type Record struct {
 	TTL    int      `json:"ttl"`
 }
 
-// Store is the interface for storing DNS records
+// Store interface for record storage
 type Store interface {
 	List() ([]Record, error)
 	Get(name string) (Record, bool, error)
@@ -29,7 +28,7 @@ type Store interface {
 	Delete(name string) error
 }
 
-// MemStore is an in-memory implementation of Store
+// MemStore is an in-memory store implementation
 type MemStore struct {
 	mu      sync.RWMutex
 	records map[string]Record
@@ -42,25 +41,28 @@ func NewMemStore() *MemStore {
 	}
 }
 
+// List returns all records
 func (m *MemStore) List() ([]Record, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	records := make([]Record, 0, len(m.records))
-	for _, r := range m.records {
-		records = append(records, r)
+	for _, record := range m.records {
+		records = append(records, record)
 	}
 	return records, nil
 }
 
+// Get retrieves a record by name
 func (m *MemStore) Get(name string) (Record, bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	record, ok := m.records[name]
-	return record, ok, nil
+	record, exists := m.records[name]
+	return record, exists, nil
 }
 
+// Put stores or updates a record
 func (m *MemStore) Put(record Record) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -69,6 +71,7 @@ func (m *MemStore) Put(record Record) error {
 	return nil
 }
 
+// Delete removes a record by name
 func (m *MemStore) Delete(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -77,7 +80,7 @@ func (m *MemStore) Delete(name string) error {
 	return nil
 }
 
-// EtcdStore is an etcd-backed implementation of Store
+// EtcdStore is an etcd-backed store implementation
 type EtcdStore struct {
 	client *clientv3.Client
 	prefix string
@@ -90,7 +93,7 @@ func NewEtcdStore(endpoints []string, prefix string) (*EtcdStore, error) {
 		DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create etcd client: %w", err)
+		return nil, err
 	}
 
 	return &EtcdStore{
@@ -99,28 +102,26 @@ func NewEtcdStore(endpoints []string, prefix string) (*EtcdStore, error) {
 	}, nil
 }
 
+// Close closes the etcd client connection
 func (e *EtcdStore) Close() error {
 	return e.client.Close()
 }
 
-func (e *EtcdStore) key(name string) string {
-	return fmt.Sprintf("%s/%s", e.prefix, name)
-}
-
+// List returns all records from etcd
 func (e *EtcdStore) List() ([]Record, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	resp, err := e.client.Get(ctx, e.prefix+"/", clientv3.WithPrefix())
+	resp, err := e.client.Get(ctx, e.prefix, clientv3.WithPrefix())
 	if err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, err
 	}
 
-	records := make([]Record, 0, len(resp.Kvs))
+	records := make([]Record, 0)
 	for _, kv := range resp.Kvs {
 		var record Record
-		if err := json.Unmarshal(kv.Value, &record); err != nil {
-			log.Printf("failed to unmarshal record: %v", err)
+		if err := unmarshalRecord(kv.Value, &record); err != nil {
+			log.Printf("Error unmarshaling record: %v", err)
 			continue
 		}
 		records = append(records, record)
@@ -129,13 +130,15 @@ func (e *EtcdStore) List() ([]Record, error) {
 	return records, nil
 }
 
+// Get retrieves a record by name from etcd
 func (e *EtcdStore) Get(name string) (Record, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	resp, err := e.client.Get(ctx, e.key(name))
+	key := e.prefix + name
+	resp, err := e.client.Get(ctx, key)
 	if err != nil {
-		return Record{}, false, fmt.Errorf("failed to get record: %w", err)
+		return Record{}, false, err
 	}
 
 	if len(resp.Kvs) == 0 {
@@ -143,40 +146,50 @@ func (e *EtcdStore) Get(name string) (Record, bool, error) {
 	}
 
 	var record Record
-	if err := json.Unmarshal(resp.Kvs[0].Value, &record); err != nil {
-		return Record{}, false, fmt.Errorf("failed to unmarshal record: %w", err)
+	if err := unmarshalRecord(resp.Kvs[0].Value, &record); err != nil {
+		return Record{}, false, err
 	}
 
 	return record, true, nil
 }
 
+// Put stores or updates a record in etcd
 func (e *EtcdStore) Put(record Record) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	data, err := json.Marshal(record)
+	key := e.prefix + record.Name
+	value, err := marshalRecord(record)
 	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
+		return err
 	}
 
-	_, err = e.client.Put(ctx, e.key(record.Name), string(data))
-	if err != nil {
-		return fmt.Errorf("failed to put record: %w", err)
-	}
-
-	return nil
+	_, err = e.client.Put(ctx, key, value)
+	return err
 }
 
+// Delete removes a record by name from etcd
 func (e *EtcdStore) Delete(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := e.client.Delete(ctx, e.key(name))
-	if err != nil {
-		return fmt.Errorf("failed to delete record: %w", err)
-	}
+	key := e.prefix + name
+	_, err := e.client.Delete(ctx, key)
+	return err
+}
 
-	return nil
+// Helper functions for JSON marshaling
+func marshalRecord(record Record) (string, error) {
+	// Use encoding/json for proper marshaling
+	data, err := json.Marshal(record)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func unmarshalRecord(data []byte, record *Record) error {
+	return json.Unmarshal(data, record)
 }
 
 // InitStore initializes the appropriate store based on environment variables
@@ -188,16 +201,12 @@ func InitStore() (Store, error) {
 	}
 
 	endpoints := strings.Split(etcdEndpoints, ",")
-	for i, ep := range endpoints {
-		endpoints[i] = strings.TrimSpace(ep)
-	}
-
 	prefix := os.Getenv("ETCD_PREFIX")
 	if prefix == "" {
-		prefix = "/conn3ction/records"
+		prefix = "/conn3ction/records/"
 	}
 
-	log.Printf("Initializing etcd store with endpoints: %v, prefix: %s", endpoints, prefix)
+	log.Printf("Connecting to etcd at %v with prefix %s", endpoints, prefix)
 	store, err := NewEtcdStore(endpoints, prefix)
 	if err != nil {
 		log.Printf("Failed to connect to etcd: %v, falling back to in-memory store", err)
