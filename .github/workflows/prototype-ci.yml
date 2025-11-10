@@ -10,6 +10,9 @@ on:
       - 'prototype/api/**'
       - '.github/workflows/prototype-ci.yml'
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: Build and Test API
