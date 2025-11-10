@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-config
+  labels:
+    app: coredns
+    chart: {{ include "conn3ction-coredns-etcd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  {{- if .Values.useEtcd }}
+  Corefile: |
+    {{ .Values.zone.name }} {
+        log
+        errors
+        etcd {
+            path {{ .Values.etcdPath }}
+            endpoint {{ .Values.etcdEndpoints }}
+        }
+        forward . /etc/resolv.conf
+        cache 30
+    }
+
+    . {
+        forward . /etc/resolv.conf
+        log
+        errors
+        cache 30
+    }
+  {{- else }}
+  Corefile: |
+    {{ .Values.zone.name }} {
+        log
+        errors
+        file /etc/coredns/zones/{{ .Values.zone.name }}zone
+        forward . /etc/resolv.conf
+        cache 30
+    }
+
+    . {
+        forward . /etc/resolv.conf
+        log
+        errors
+        cache 30
+    }
+  {{ .Values.zone.name }}zone: |
+{{ .Values.zone.records | indent 4 }}
+  {{- end }}

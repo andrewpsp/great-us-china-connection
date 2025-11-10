@@ -1,0 +1,6 @@
+apiVersion: v2
+name: conn3ction-coredns-etcd
+description: A Helm chart for CoreDNS with etcd backend for Conn3ction
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

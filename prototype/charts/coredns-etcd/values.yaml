@@ -1,0 +1,57 @@
+# Default values for conn3ction-coredns-etcd
+
+# Set to true to use etcd backend, false for ConfigMap-based zone file
+useEtcd: true
+
+# Zone configuration
+zone:
+  name: "example.local."
+  records: |
+    example.local. 60 IN SOA ns1.example.local. admin.example.local. 2024111001 3600 1800 604800 60
+    example.local. 60 IN NS ns1.example.local.
+    ns1.example.local. 60 IN A 10.0.0.1
+    test.example.local. 60 IN A 10.1.2.3
+
+# CoreDNS configuration
+coredns:
+  replicaCount: 1
+  image:
+    repository: coredns/coredns
+    tag: "1.11.1"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 53
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# etcd configuration
+etcd:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: quay.io/coreos/etcd
+    tag: "v3.5.12"
+    pullPolicy: IfNotPresent
+  service:
+    clientPort: 2379
+    peerPort: 2380
+  persistence:
+    enabled: false
+    size: 1Gi
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# etcd connection for CoreDNS etcd plugin
+etcdEndpoints: "etcd:2379"
+etcdPath: "/conn3ction/zones"
