@@ -1,0 +1,51 @@
+---
+{{- if .Values.etcd.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd
+  labels:
+    app: etcd
+    chart: {{ include "conn3ction-coredns-etcd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: client
+    port: {{ .Values.etcd.service.clientPort }}
+    targetPort: client
+    protocol: TCP
+  - name: peer
+    port: {{ .Values.etcd.service.peerPort }}
+    targetPort: peer
+    protocol: TCP
+  selector:
+    app: etcd
+    release: {{ .Release.Name }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coredns
+  labels:
+    app: coredns
+    chart: {{ include "conn3ction-coredns-etcd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.coredns.service.type }}
+  ports:
+  - name: dns-udp
+    port: {{ .Values.coredns.service.port }}
+    targetPort: dns-udp
+    protocol: UDP
+  - name: dns-tcp
+    port: {{ .Values.coredns.service.port }}
+    targetPort: dns-tcp
+    protocol: TCP
+  selector:
+    app: coredns
+    release: {{ .Release.Name }}
